@@ -7,5 +7,5 @@ ml-collections==0.1.0
 numpy>=1.19.5
 pandas>=1.1.0
 tensorflow>=2.0.0-beta1
-jax>=0.1.55
-jaxlib>=0.1.37
+jax[cuda11_cudnn805]
+--extra-index-url -f https://storage.googleapis.com/jax-releases/jax_releases.html

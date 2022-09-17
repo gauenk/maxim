@@ -22,6 +22,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
+# import dnls.jax as dnls
 
 Conv3x3 = functools.partial(nn.Conv, kernel_size=(3, 3))
 Conv1x1 = functools.partial(nn.Conv, kernel_size=(1, 1))
