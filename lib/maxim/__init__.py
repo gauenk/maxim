@@ -1,14 +1,15 @@
-# Copyright 2022 Google LLC.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
+# -- api --
+from . import utils
+
+# -- model version --
+from .original import load_model as load_original_model
+from .augmented import load_model as load_augmented_model
+
+
+def load_model(*args,**kwargs):
+    attn_mode = optional(kwargs,"attn_mode","original")
+    if "original" in attn_mode:
+        return load_original_model(*args,**kwargs)
+    else:
+        return load_augmented_model(*args,**kwargs)

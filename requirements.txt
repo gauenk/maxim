@@ -1,8 +1,24 @@
+opencv-python
+easydict
+einops
+pathlib
+pytest
+pylint
+numpy
+numba
+rawpy
+joblib
+hdf5storage
+tqdm
+pandas
+timm
+scikit-image
+pytorch-lightning
+# -- divide --
 absl-py>=0.12.0
 chex>=0.0.7
 clu>=0.0.3
 einops>=0.3.0
-flax>=0.3.3
 ml-collections==0.1.0
 numpy>=1.19.5
 pandas>=1.1.0
@@ -10,5 +26,5 @@ torch==1.12.1+cu113
 tensorflow>=2.0.0-beta1
 https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.3.15+cuda11.cudnn805-cp38-none-manylinux2014_x86_64.whl # jaxlib
 jax==0.3.16
-flax=0.6.0
+flax==0.6.0
 --extra-index-url https://download.pytorch.org/whl/cu113

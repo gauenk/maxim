@@ -37,7 +37,7 @@ flags.DEFINE_enum(
 flags.DEFINE_string('ckpt_path', '', 'Path to checkpoint.')
 flags.DEFINE_string('input_dir', '', 'Input dir to the test set.')
 flags.DEFINE_string('output_dir', '', 'Output dir to store predicted images.')
-flags.DEFINE_boolean('has_target', True, 'Whether has corresponding gt image.')
+flags.DEFINE_boolean('has_target', False, 'Whether has corresponding gt image.')
 flags.DEFINE_boolean('save_images', True, 'Dump predicted images.')
 flags.DEFINE_boolean('geometric_ensemble', False,
                      'Whether use ensemble infernce.')
@@ -318,6 +318,8 @@ def make_shape_even(image):
 
 
 def main(_):
+  # print(FLAGS)
+  # print("hi")
   params = get_params(FLAGS.ckpt_path)
 
   if FLAGS.save_images:
@@ -330,6 +332,7 @@ def main(_):
       for x in filepath
       if is_image_file(x)
   ]
+  print("FLAGS.has_target: ",FLAGS.has_target)
   if FLAGS.has_target:
     target_filenames = [
         os.path.join(FLAGS.input_dir, 'target', x)
@@ -350,6 +353,7 @@ def main(_):
     input_file = input_filenames[i]
     input_img = np.asarray(Image.open(input_file).convert('RGB'),
                            np.float32) / 255.
+    print("FLAGS.has_target: ",FLAGS.has_target)
     if FLAGS.has_target:
       target_file = target_filenames[i]
       target_img = np.asarray(Image.open(target_file).convert('RGB'),
@@ -390,6 +394,7 @@ def main(_):
     preds = preds[h_start:h_end, w_start:w_end, :]
 
     # print PSNR scores
+    print("FLAGS.has_target: ",FLAGS.has_target)
     if FLAGS.has_target:
       psnr = calculate_psnr(
           target_img * 255., preds * 255., crop_border=0, test_y_channel=False)
