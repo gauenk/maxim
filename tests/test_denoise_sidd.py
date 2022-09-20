@@ -16,9 +16,9 @@ from easydict import EasyDict as edict
 # -- vision --
 from PIL import Image
 
-# -- testing --
-import unittest
-import tempfile
+# -- vision --
+import flax
+import tensorflow as tf
 
 # -- linalg --
 import torch as th
@@ -46,9 +46,7 @@ if not SAVE_DIR.exists():
 
 def set_seed(seed):
     random.seed(seed)
-    th.manual_seed(seed)
     np.random.seed(seed)
-    # th.use_deterministic_algorithms(True)
 
 def pytest_generate_tests(metafunc):
     seed = 123
@@ -61,9 +59,14 @@ def pytest_generate_tests(metafunc):
         if key in metafunc.fixturenames:
             metafunc.parametrize(key,val)
 
+def weird_unlist(preds):
+    if isinstance(preds, list):
+        preds = preds[-1]
+        if isinstance(preds, list):
+            preds = preds[-1]
+    return preds
 
-
-def test_fwd():
+def test_fwd(sigma):
     # -- params --
     device = "cuda:0"
     # vid_set = "sidd_rgb"
@@ -85,7 +88,8 @@ def test_fwd():
     cfg.dname = vid_set
     cfg.vid_name = vid_name
     cfg.isize = isize
-    cfg.sigma = 30.
+    cfg.sigma = sigma
+    attn_mode = "product_dnls"
 
     # -- video --
     data,loaders = data_hub.sets.load(cfg)
@@ -96,9 +100,12 @@ def test_fwd():
     # -- unpack --
     sample = data[dset][index]
     region = sample['region']
+    region[0],region[1] = 0,2
     noisy,clean = sample['noisy'],sample['clean']
     noisy,clean = rslice_pair(noisy,clean,region)
-    noisy,clean = noisy.to(device),clean.to(device)
+    noisy,clean = noisy.cpu().numpy(),clean.cpu().numpy()
+    noisy = rearrange(noisy,'t c h w -> t h w c')
+    clean = rearrange(clean,'t c h w -> t h w c')
     vid_frames = sample['fnums']
     noisy /= 255.
     # print("noisy.shape: ",noisy.shape)
@@ -106,37 +113,31 @@ def test_fwd():
     # -- flows --
     t,c,h,w = noisy.shape
     flows = edict()
-    flows.fflow = th.zeros((t,2,h,w),device=noisy.device)
-    flows.bflow = th.zeros((t,2,h,w),device=noisy.device)
+    flows.fflow = np.zeros((t,h,w,2))
+    flows.bflow = np.zeros((t,h,w,2))
+    print("hi.")
 
     # -- original exec --
-    model_gt = maxim.original.load_model(sigma,noise_version=noise_version)
-    model_gt.eval()
-    with th.no_grad():
-        _ = model_gt(noisy).detach()
-    timer.start("original")
-    with th.no_grad():
-        deno_gt = model_gt(noisy).detach()
-    th.cuda.synchronize()
-    timer.stop("original")
+    print("a.")
+    model_gt,params_gt = maxim.augmented.load_model(sigma,noise_version=noise_version)
+    # model_gt,params_gt = maxim.original.load_model(sigma,noise_version=noise_version)
+    # _ = model_gt.apply({'params': flax.core.freeze(params_gt)}, noisy)
+    print("b.")
+    deno_gt = model_gt.apply({'params': flax.core.freeze(params_gt)}, noisy)
+    deno_gt = weird_unlist(deno_gt)
+    print("c.")
+    print(deno_gt.shape)
+    # exit(0)
 
     # -- refactored exec --
-    t,c,h,w = noisy.shape
-    region = None#[0,t,0,0,h,w] if ref_version == "ref" else None
-    # attn_mode = "window_original"
-    # attn_mode = "window_dnls"
-    attn_mode = "product_dnls"
-    # attn_mode = "window_refactored"
-    model_te = maxim.original.load_model(sigma,noise_version=noise_version)
-    # model_te = maxim.augmented.load_model(sigma,attn_mode=attn_mode,
-    #                                       stride=8,noise_version=noise_version)
-    print("-"*10)
-    model_te.eval()
-    timer.start("aug")
-    with th.no_grad():
-        deno_te = model_te(noisy).detach()
-    th.cuda.synchronize()
-    timer.stop("aug")
+    model_te,params_te = maxim.original.load_model(sigma,noise_version=noise_version)
+    timer.start("first")
+    deno_te = model_te.apply({'params': flax.core.freeze(params_te)}, noisy)
+    timer.stop("first")
+    timer.start("second")
+    deno_te = model_te.apply({'params': flax.core.freeze(params_te)}, noisy)
+    timer.stop("second")
+    deno_te = weird_unlist(deno_te)
 
     # -- viz --
     print(timer)
@@ -145,16 +146,17 @@ def test_fwd():
         print(deno_te[0,0,:3,:3])
 
     # -- viz --
-    diff_s = th.abs(deno_gt - deno_te)# / (deno_gt.abs()+1e-5)
-    print(diff_s.max())
-    diff_s /= diff_s.max()
-    print("diff_s.shape: ",diff_s.shape)
-    dnls.testing.data.save_burst(diff_s[:3],SAVE_DIR,"diff")
-    dnls.testing.data.save_burst(deno_gt[:3],SAVE_DIR,"deno_gt")
-    dnls.testing.data.save_burst(deno_te[:3],SAVE_DIR,"deno_te")
+    # diff_s = np.abs(deno_gt - deno_te)# / (deno_gt.abs()+1e-5)
+    # print(diff_s.max())
+    # diff_s /= diff_s.max()
+    # print("diff_s.shape: ",diff_s.shape)
+    # dnls.testing.data.save_burst(diff_s[:3],SAVE_DIR,"diff")
+    # dnls.testing.data.save_burst(deno_gt[:3],SAVE_DIR,"deno_gt")
+    # dnls.testing.data.save_burst(deno_te[:3],SAVE_DIR,"deno_te")
 
     # -- test --
-    error = th.abs(deno_gt - deno_te).mean().item()
+    error = np.abs(deno_gt - deno_te).mean().item()
+    print(error)
     if verbose: print("error: ",error)
     assert error < 1e-5
 

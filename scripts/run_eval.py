@@ -341,7 +341,7 @@ def main(_):
     ]
   num_images = len(input_filenames)
 
-  model_mod = importlib.import_module(f'maxim.models.{_MODEL_FILENAME}')
+  model_mod = importlib.import_module(f'maxim.original.{_MODEL_FILENAME}')
   model_configs = ml_collections.ConfigDict(_MODEL_CONFIGS)
   model_configs.variant = _MODEL_VARIANT_DICT[FLAGS.task]
   model = model_mod.Model(**model_configs)
@@ -373,6 +373,7 @@ def main(_):
       input_img = np.expand_dims(input_img, axis=0)
 
     # handle multi-stage outputs, obtain the last scale output of last stage
+    print("input_img.shape: ",input_img.shape)
     preds = model.apply({'params': flax.core.freeze(params)}, input_img)
     if isinstance(preds, list):
       preds = preds[-1]

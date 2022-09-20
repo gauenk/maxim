@@ -6,10 +6,53 @@ import copy
 ccopy = copy.copy
 from einops import repeat
 from pathlib import Path
+import collections
 from collections import OrderedDict
+
+import io
+import numpy as np
+import tensorflow as tf
 
 from .model_keys import translate_attn_mode,expand_attn_mode
 from .qkv_convert import qkv_convert_state,block_name2num
+
+def get_params(ckpt_path):
+    """Get params checkpoint."""
+
+    with tf.io.gfile.GFile(ckpt_path, 'rb') as f:
+        data = f.read()
+
+    values = np.load(io.BytesIO(data))
+    params = recover_tree(*zip(*values.items()))
+    params = params['opt']['target']
+
+    return params
+
+def recover_tree(keys, values):
+  """Recovers a tree as a nested dict from flat names and values.
+
+  This function is useful to analyze checkpoints that are saved by our programs
+  without need to access the exact source code of the experiment. In particular,
+  it can be used to extract an reuse various subtrees of the scheckpoint, e.g.
+  subtree of parameters.
+  Args:
+    keys: a list of keys, where '/' is used as separator between nodes.
+    values: a list of leaf values.
+  Returns:
+    A nested tree-like dict.
+  """
+  tree = {}
+  sub_trees = collections.defaultdict(list)
+  for k, v in zip(keys, values):
+    if '/' not in k:
+      tree[k] = v
+    else:
+      k_left, k_right = k.split('/', 1)
+      sub_trees[k_left].append((k_right, v))
+  for k, kv_pairs in sub_trees.items():
+    k_subtree, v_subtree = zip(*kv_pairs)
+    tree[k] = recover_tree(k_subtree, v_subtree)
+  return tree
 
 def freeze(model):
     for p in model.parameters():
