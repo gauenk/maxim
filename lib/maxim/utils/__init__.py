@@ -8,3 +8,4 @@ from . import timer
 from . import gpu_mem
 from . import misc
 from . import metrics
+from . import flatten_util

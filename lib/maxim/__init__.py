@@ -2,6 +2,9 @@
 # -- api --
 from . import utils
 
+# -- misc --
+from .common import optional
+
 # -- model version --
 from .original import load_model as load_original_model
 from .augmented import load_model as load_augmented_model

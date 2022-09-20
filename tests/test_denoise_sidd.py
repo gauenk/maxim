@@ -17,8 +17,10 @@ from easydict import EasyDict as edict
 from PIL import Image
 
 # -- vision --
+import jax
 import flax
 import tensorflow as tf
+import jax.numpy as jnp
 
 # -- linalg --
 import torch as th
@@ -115,28 +117,15 @@ def test_fwd(sigma):
     flows = edict()
     flows.fflow = np.zeros((t,h,w,2))
     flows.bflow = np.zeros((t,h,w,2))
-    print("hi.")
 
     # -- original exec --
-    print("a.")
-    model_gt,params_gt = maxim.augmented.load_model(sigma,noise_version=noise_version)
-    # model_gt,params_gt = maxim.original.load_model(sigma,noise_version=noise_version)
-    # _ = model_gt.apply({'params': flax.core.freeze(params_gt)}, noisy)
-    print("b.")
+    model_gt,params_gt = maxim.load_model(sigma,attn_mode="original")
     deno_gt = model_gt.apply({'params': flax.core.freeze(params_gt)}, noisy)
     deno_gt = weird_unlist(deno_gt)
-    print("c.")
-    print(deno_gt.shape)
-    # exit(0)
 
     # -- refactored exec --
-    model_te,params_te = maxim.original.load_model(sigma,noise_version=noise_version)
-    timer.start("first")
+    model_te,params_te = maxim.load_model(sigma,attn_mode="product")
     deno_te = model_te.apply({'params': flax.core.freeze(params_te)}, noisy)
-    timer.stop("first")
-    timer.start("second")
-    deno_te = model_te.apply({'params': flax.core.freeze(params_te)}, noisy)
-    timer.stop("second")
     deno_te = weird_unlist(deno_te)
 
     # -- viz --
@@ -160,6 +149,83 @@ def test_fwd(sigma):
     if verbose: print("error: ",error)
     assert error < 1e-5
 
-def test_bwd():
-    pass
+def test_bwd(sigma):
+
+    # -- params --
+    device = "cuda:0"
+    # vid_set = "sidd_rgb"
+    # vid_name = "00"
+    # dset = "val"
+    vid_set = "set8"
+    vid_name = "motorbike"
+    verbose = False
+    isize = "128_128"
+    dset = "te"
+    flow = False
+    noise_version = "blur"
+
+    # -- timer --
+    timer = maxim.utils.timer.ExpTimer()
+
+    # -- setup cfg --
+    cfg = edict()
+    cfg.dname = vid_set
+    cfg.vid_name = vid_name
+    cfg.isize = isize
+    cfg.sigma = sigma
+    attn_mode = "product_dnls"
+
+    # -- video --
+    data,loaders = data_hub.sets.load(cfg)
+    groups = data[dset].groups
+    indices = [i for i,g in enumerate(groups) if cfg.vid_name == g]
+    index = indices[0]
+
+    # -- unpack --
+    sample = data[dset][index]
+    region = sample['region']
+    region[0],region[1] = 0,1
+    noisy,clean = sample['noisy'],sample['clean']
+    noisy,clean = rslice_pair(noisy,clean,region)
+    noisy,clean = noisy.cpu().numpy(),clean.cpu().numpy()
+    noisy = rearrange(noisy,'t c h w -> t h w c')
+    clean = rearrange(clean,'t c h w -> t h w c')
+    vid_frames = sample['fnums']
+    noisy /= 255.
+    # print("noisy.shape: ",noisy.shape)
+
+    # -- flows --
+    t,c,h,w = noisy.shape
+    flows = edict()
+    flows.fflow = np.zeros((t,h,w,2))
+    flows.bflow = np.zeros((t,h,w,2))
+
+    # -- original exec --
+    model_gt,params_gt = maxim.load_model(sigma,attn_mode="original")
+    # @jax.jit
+    def _loss_gt(_params, x, y):
+        pred = model_gt.apply({'params': _params},x)
+        pred = weird_unlist(pred)
+        return jnp.mean((pred-y)**2)
+    loss_gt = jax.value_and_grad(_loss_gt)
+    _,grad_gt = loss_gt(params_gt,noisy,clean)
+    grad_gt = maxim.utils.flatten_util.ravel_pytree(grad_gt)[0]
+
+    # -- refactored exec --
+    model_te,params_te = maxim.load_model(sigma,attn_mode="product")
+    # @jax.jit
+    def _loss_te(_params, x, y):
+        pred = model_te.apply({'params': _params},x)
+        pred = weird_unlist(pred)
+        return jnp.mean((pred-y)**2)
+    loss_te = jax.value_and_grad(_loss_te)
+    _,grad_te = loss_te(params_te,noisy,clean)
+    grad_te = maxim.utils.flatten_util.ravel_pytree(grad_te)[0]
+
+    # -- test --
+    error = jnp.abs(grad_gt - grad_te).mean().item()
+    print(error)
+    if verbose: print("error: ",error)
+    assert error < 1e-5
+
 

@@ -243,8 +243,7 @@ class MAXIM(nn.Module):
                 ratio=2**(self.depth - j - 1 - i),
                 use_bias=self.use_bias)(skip)
             for j, skip in enumerate(skip_features)
-        ],
-                                 axis=-1)
+        ],axis=-1)
 
         # Decoder block
         x = UNetDecoderBlock(
